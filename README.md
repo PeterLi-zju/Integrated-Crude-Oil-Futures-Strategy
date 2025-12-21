@@ -118,7 +118,7 @@ pipeline.quick_test()
 详见 [strategy_backtest.py](strategy_backtest.py#L15-L210)
 
 ### 输出层
-生成 7 类分析图表：
+生成 8 类分析图表：
 - 模型性能对比
 - 特征重要性排序
 - 回测性能摘要
@@ -126,6 +126,7 @@ pipeline.quick_test()
 - 收益分布统计
 - 预测准确性分析
 - 价格与交易信号
+- 交易时间线与累计盈亏
 
 详见 [visualization.py](visualization.py#L17-L326)
 
@@ -149,6 +150,7 @@ pipeline.quick_test()
 | 收益分布 | `output/returns_distribution.png` | 收益率直方图 |
 | 预测分析 | `output/prediction_analysis.png` | 预测准确率分析 |
 | 交易信号 | `output/price_signals.png` | 价格与买卖信号图 |
+| 交易时间线 | `output/trade_timeline.png` | 交易持仓区间与累计盈亏轨迹 |
 | 调参结果 | `output/best_params.json` | Optuna 最优参数 |
 
 ## 调参优化
@@ -188,6 +190,7 @@ python tune.py --trials 50 --study-name cl_ml_tune
    - 支持多空双向交易，`STRATEGY_CONFIG['long_only']` 控制是否禁用卖空（默认允许卖空）
    - 若需仅做多，将配置设为 `True`
    - 默认自动读取 `output/best_params.json` 覆盖模型与策略配置（可在 `config.py` 中将 `USE_BEST_PARAMS=False` 或通过 `BEST_PARAMS_PATH` 环境变量自定义路径）
+   - 回测交易记录会保存到 `STRATEGY_CONFIG['trades_log_path']`（默认 `output/trades.json`），便于复盘与审计
 
 4. **依赖问题**：
    - Windows 用户如遇 joblib 保存问题，可改用 pickle

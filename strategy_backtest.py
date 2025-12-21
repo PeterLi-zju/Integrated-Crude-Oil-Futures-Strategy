@@ -3,6 +3,7 @@
 原油期货多模型集成投资策略
 """
 
+import os
 import numpy as np
 import pandas as pd
 from typing import Dict, Optional, Tuple
@@ -241,6 +242,9 @@ class BacktestEngine:
             take_profit=self.config.get('take_profit', 0.10)
         )
         
+        # 持久化交易记录
+        self._save_trades_json()
+        
         # 提取统计信息
         self.stats = self._extract_stats()
         
@@ -382,6 +386,27 @@ class BacktestEngine:
             return pd.Series()
         
         return self.results._equity_curve['Equity']
+    
+    def _save_trades_json(self):
+        """将交易记录保存为 JSON 便于后续分析/复现"""
+        path = self.config.get('trades_log_path')
+        if not path or self.results is None:
+            return
+        
+        trades = self.get_trades()
+        if trades is None or trades.empty:
+            logger.info("无交易记录可保存")
+            return
+        
+        # 转字符串避免时间序列序列化问题
+        trades_to_dump = trades.copy()
+        for col in trades_to_dump.columns:
+            if np.issubdtype(trades_to_dump[col].dtype, np.datetime64):
+                trades_to_dump[col] = trades_to_dump[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        trades_to_dump.to_json(path, orient='records', force_ascii=False)
+        logger.info(f"交易记录已写入 {path}")
     
     def print_summary(self):
         """打印回测摘要"""

@@ -109,6 +109,9 @@ STRATEGY_CONFIG = {
     # 是否仅做多（False 时启用卖空）
     'long_only': False,
     
+    # 交易记录输出
+    'trades_log_path': 'output/trades.json',
+    
     # 信号阈值
     'threshold_buy': 0.58,   # 买入阈值
     'threshold_sell': 0.38,  # 卖出阈值

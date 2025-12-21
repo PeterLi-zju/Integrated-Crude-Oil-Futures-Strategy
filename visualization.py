@@ -381,23 +381,25 @@ class Visualizer:
             axes[0, 0].text(i, v + (2 if v > 0 else -5), f'{v:.1f}%', 
                            ha='center', fontsize=10)
         
-        # 风险指标
-        risk_metrics = {
-            'Max Drawdown': abs(stats.get('max_drawdown', 0)),
-            'Sharpe Ratio': stats.get('sharpe_ratio', 0) or 0,
-            'Win Rate': stats.get('win_rate', 0),
-        }
-        
+        # 风险 & 胜率（百分比）+ 夏普（独立刻度）
         ax2 = axes[0, 1]
-        x = range(len(risk_metrics))
-        bars = ax2.bar(x, risk_metrics.values(), color=['red', 'blue', 'green'])
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(risk_metrics.keys())
-        ax2.set_title('Risk & Performance Metrics')
-        for bar, (k, v) in zip(bars, risk_metrics.items()):
-            label = f'{v:.2f}' if k == 'Sharpe Ratio' else f'{v:.1f}%'
+        risk_labels = ['Win Rate', 'Max Drawdown']
+        risk_values = [stats.get('win_rate', 0), abs(stats.get('max_drawdown', 0))]
+        bars = ax2.bar(risk_labels, risk_values, color=['green', 'red'])
+        ax2.set_ylabel('Percent (%)')
+        ax2.set_title('Risk & Win Metrics')
+        ax2.axhline(y=0, color='black', linewidth=0.5)
+        for bar, val in zip(bars, risk_values):
             ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                    label, ha='center', fontsize=10)
+                     f'{val:.1f}%', ha='center', fontsize=10)
+        
+        sharpe = stats.get('sharpe_ratio', 0) or 0
+        ax2b = ax2.twinx()
+        ax2b.plot([min(ax2.get_xlim()), max(ax2.get_xlim())], [sharpe, sharpe],
+                  linestyle='--', color='blue', label='Sharpe Ratio')
+        ax2b.scatter([0.5], [sharpe], color='blue', zorder=3)
+        ax2b.set_ylabel('Sharpe Ratio')
+        ax2b.legend(loc='upper right')
         
         # 交易统计
         trade_stats = {
@@ -526,6 +528,70 @@ class Visualizer:
         
         return fig
     
+    def plot_trade_timeline(self, trades: pd.DataFrame,
+                             save: bool = True,
+                             filename: str = 'trade_timeline.png') -> Optional[plt.Figure]:
+        """
+        可视化交易时间线与累计盈亏
+        """
+        if trades is None or trades.empty:
+            logger.info("无交易数据，跳过交易时间线图")
+            return None
+        
+        df = trades.copy()
+        # 兼容字符串时间
+        if 'EntryTime' in df.columns:
+            df['EntryTime'] = pd.to_datetime(df['EntryTime'])
+            df['ExitTime'] = pd.to_datetime(df['ExitTime'])
+        else:
+            return None
+        
+        df = df.sort_values('EntryTime').reset_index(drop=True)
+        df['Direction'] = np.where(df['Size'] >= 0, 'Long', 'Short')
+        df['Color'] = np.where(df['ReturnPct'] >= 0, 'mediumseagreen', 'tomato')
+        
+        # 时间线
+        fig, axes = plt.subplots(2, 1, figsize=(16, 10), gridspec_kw={'height_ratios': [3, 1]})
+        ax1, ax2 = axes
+        
+        entry_num = mdates.date2num(df['EntryTime'])
+        exit_num = mdates.date2num(df['ExitTime'])
+        duration = exit_num - entry_num
+        y_pos = np.arange(len(df))
+        
+        ax1.barh(y_pos, duration, left=entry_num, color=df['Color'], alpha=0.8)
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels([f"T{idx+1} ({dirn})" for idx, dirn in enumerate(df['Direction'])])
+        ax1.invert_yaxis()
+        ax1.xaxis_date()
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        ax1.set_title('Trade Timeline (Entry → Exit)')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('Trades')
+        
+        for i, (start, end, ret) in enumerate(zip(df['EntryTime'], df['ExitTime'], df['ReturnPct'])):
+            ax1.text(mdates.date2num(end) + 2, i, f"{ret:.1%}", va='center', fontsize=9)
+        
+        # 累计盈亏
+        df['CumulativePnL'] = df['PnL'].cumsum()
+        ax2.plot(df['ExitTime'], df['CumulativePnL'], marker='o', color='steelblue')
+        ax2.axhline(0, color='black', linewidth=0.8)
+        ax2.set_title('Cumulative PnL by Exit Time')
+        ax2.set_xlabel('Exit Date')
+        ax2.set_ylabel('PnL ($)')
+        ax2.grid(True, alpha=0.3)
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        
+        fig.autofmt_xdate()
+        plt.tight_layout()
+        
+        if save:
+            filepath = os.path.join(self.output_dir, filename)
+            plt.savefig(filepath, dpi=self.config.get('dpi', 100), bbox_inches='tight')
+            logger.info(f"交易时间线图已保存到 {filepath}")
+        
+        return fig
+    
     def generate_report(self, model_results: Dict,
                         feature_importance: pd.DataFrame,
                         backtest_stats: Dict,
@@ -568,6 +634,7 @@ class Visualizer:
         # 收益分布
         if trades is not None and len(trades) > 0:
             self.plot_returns_distribution(trades)
+            self.plot_trade_timeline(trades)
         
         # 预测分析
         if y_true is not None and y_pred is not None and y_proba is not None:
