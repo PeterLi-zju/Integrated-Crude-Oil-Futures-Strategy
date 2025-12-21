@@ -34,7 +34,9 @@
     ├── equity_curve.png           # 权益曲线
     ├── returns_distribution.png   # 收益分布
     ├── prediction_analysis.png    # 预测分析
-    └── price_signals.png          # 价格信号图
+    ├── price_signals.png          # 价格信号图
+    ├── trade_timeline.png         # 交易时间线与累计盈亏
+    └── trades.json                # 交易记录明细
 ```
 
 ## 运行环境
@@ -88,7 +90,7 @@ pipeline.quick_test()
 - 动量特征：多窗口 (5, 10, 20, 60 日)
 - 交互特征：衍生变量
 - **目标**：预测未来5日上涨概率（二分类）
-- **特征选择**：自动筛选 70 个最重要特征
+ - **特征选择**：默认筛选 70 个最重要特征（如加载 `output/best_params.json` 会用最优值 30）
 
 详见 [feature_engineering.py](feature_engineering.py#L18-L199)
 
@@ -106,14 +108,9 @@ pipeline.quick_test()
 详见 [model_trainer.py](model_trainer.py#L21-L214)
 
 ### 策略层
-- **买入信号**：预测概率 ≥ 58%
-- **卖出信号**：预测概率 ≤ 38%
-- **单笔头寸**：账户资金 45%
-- **佣金**：0.1%
-- **滑点**：0.1%
-- **止损**：4%
-- **止盈**：14%
-- **持仓方向**：默认仅做多
+- **默认基线**（`config.py`）：买入 ≥ 0.58，卖出 ≤ 0.38，单笔仓位 45%，止损 4%，止盈 14%，佣金/滑点 0.1%，`long_only=False` 支持多空
+- **最佳参数覆盖**（自动加载 `output/best_params.json`）：买入 0.63，卖出 0.37，单笔仓位 30%，止损 6%，止盈 10%，特征数 30，集成权重/模型超参同步更新
+- **交易记录**：回测结束自动写入 `output/trades.json`
 
 详见 [strategy_backtest.py](strategy_backtest.py#L15-L210)
 
@@ -151,6 +148,7 @@ pipeline.quick_test()
 | 预测分析 | `output/prediction_analysis.png` | 预测准确率分析 |
 | 交易信号 | `output/price_signals.png` | 价格与买卖信号图 |
 | 交易时间线 | `output/trade_timeline.png` | 交易持仓区间与累计盈亏轨迹 |
+| 交易记录 | `output/trades.json` | 回测期间的逐笔持仓记录 |
 | 调参结果 | `output/best_params.json` | Optuna 最优参数 |
 
 ## 调参优化
