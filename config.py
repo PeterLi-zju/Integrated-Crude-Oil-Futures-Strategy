@@ -16,7 +16,7 @@ DATA_CONFIG = {
     
     # 时间跨度
     'start_date': '2016-01-01',
-    'end_date': '2025-12-01',
+    'end_date': '2025-12-20',
     
     # 宏观经济数据标的
     'macro_symbols': [
@@ -26,7 +26,18 @@ DATA_CONFIG = {
         '^VIX',      # 恐慌指数
         'USO',       # 美国原油基金ETF
         'GC=F',      # 黄金期货
+        'HO=F',      # 取暖油期货（用于裂解价差）
+        'RB=F',      # RBOB汽油期货（用于裂解价差）
     ],
+
+    # 期限结构（次月）下载配置：
+    # - Yahoo 上并不保证存在类似 CL2=F 的连续次月代码，所以默认关闭
+    # - 若你找到了可用的次月代码（例如某些市场/后缀格式），把 enable 置 True 并填入 candidates
+    'term_structure': {
+        'enable': False,
+        'next_month_candidates': ['CL2=F', 'CL1=F'],
+        'next_month_col': 'cl_next_close',
+    },
     
     # 数据频率
     'interval': '1d',  # 日频
@@ -58,6 +69,10 @@ FEATURE_CONFIG = {
     
     # 目标变量预测窗口
     'prediction_horizon': 5,  # 预测未来N天
+
+    # 期限结构/裂解价差特征
+    'crude_price_col': 'close',  # 原油价格列名（前月合约）
+    'time_spread_next_cols': ['cl_next_close', 'cl2f_close', 'cl2_close'],  # 次月价格列候选（Front - Next）
 }
 
 # 模型配置

@@ -130,6 +130,46 @@ class DataCollector:
                 self.macro_data[clean_symbol] = df[['close']].rename(columns={'close': f'{clean_symbol}_close'})
         
         return self.macro_data
+
+    def collect_term_structure_data(self) -> Optional[pd.DataFrame]:
+        """
+        收集期限结构（例如次月合约）数据并返回仅包含收盘价的一列。
+        注意：Yahoo Finance 不一定提供连续次月代码（例如 CL2=F），默认在 config 中关闭。
+        
+        Returns:
+            包含次月收盘价列的DataFrame或None
+        """
+        term_cfg = self.config.get('term_structure') or {}
+        if not term_cfg.get('enable', False):
+            return None
+
+        candidates = term_cfg.get('next_month_candidates') or []
+        next_col = term_cfg.get('next_month_col', 'cl_next_close')
+        if not candidates:
+            return None
+
+        # 降噪：避免无效代码导致 yfinance 输出大量 ERROR（仍会在本 logger 打 warning）
+        yfinance_logger = logging.getLogger('yfinance')
+        old_level = yfinance_logger.level
+        yfinance_logger.setLevel(logging.CRITICAL)
+        try:
+            for symbol in candidates:
+                df = self._download_data(symbol)
+                if df is None or df.empty:
+                    logger.warning(f"期限结构候选 {symbol} 下载失败/为空，跳过")
+                    continue
+                if 'close' not in df.columns:
+                    logger.warning(f"期限结构候选 {symbol} 缺少 close 列，跳过")
+                    continue
+
+                out = df[['close']].rename(columns={'close': next_col})
+                logger.info(f"期限结构数据使用 {symbol} -> 列 {next_col}")
+                return out
+        finally:
+            yfinance_logger.setLevel(old_level)
+
+        logger.warning("未能下载任何期限结构（次月）数据，将跳过 time_spread 特征")
+        return None
     
     def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -220,6 +260,8 @@ class DataCollector:
         
         if not self.macro_data:
             self.collect_macro_data()
+
+        term_df = self.collect_term_structure_data()
         
         # 以期货数据为基础
         self.merged_data = self.futures_data.copy()
@@ -227,6 +269,9 @@ class DataCollector:
         # 合并宏观数据
         for symbol, macro_df in self.macro_data.items():
             self.merged_data = self.merged_data.join(macro_df, how='left')
+
+        if term_df is not None:
+            self.merged_data = self.merged_data.join(term_df, how='left')
         
         # 缺失值处理：前向填充 + 后向填充
         self.merged_data = self.merged_data.ffill().bfill()

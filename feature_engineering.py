@@ -158,6 +158,40 @@ class FeatureEngineer:
             df['bb_rsi_interaction'] = df['bb_pct'] * df['rsi']
         
         return df
+
+    def create_spread_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        创建价差类特征（期限结构/裂解价差）
+        
+        - 期限结构因子（Time Spread）：Price_FrontMonth - Price_NextMonth
+          正值通常对应 Backwardation，负值对应 Contango。
+        - 裂解价差因子（Crack Spread）：Price_HeatingOil - Price_Crude 或 Price_Gasoline - Price_Crude
+        
+        Args:
+            df: 输入DataFrame
+            
+        Returns:
+            添加价差特征后的DataFrame
+        """
+        df = df.copy()
+
+        crude_col = self.config.get('crude_price_col', 'close')
+
+        # ====== Time Spread (Front - Next) ======
+        if crude_col in df.columns:
+            next_cols = self.config.get('time_spread_next_cols', ['cl_next_close', 'cl2f_close', 'cl2_close'])
+            next_col = next((c for c in next_cols if c in df.columns), None)
+            if next_col:
+                df['time_spread'] = df[crude_col] - df[next_col]
+
+        # ====== Crack Spread (Product - Crude) ======
+        if crude_col in df.columns:
+            if 'hof_close' in df.columns:
+                df['crack_spread_ho'] = df['hof_close'] - df[crude_col]
+            if 'rbf_close' in df.columns:
+                df['crack_spread_rb'] = df['rbf_close'] - df[crude_col]
+
+        return df
     
     def create_target(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -201,6 +235,10 @@ class FeatureEngineer:
         # 创建交互特征
         df = self.create_interaction_features(df)
         logger.info(f"交互特征生成完成，当前列数: {len(df.columns)}")
+
+        # 创建价差特征
+        df = self.create_spread_features(df)
+        logger.info(f"价差特征生成完成，当前列数: {len(df.columns)}")
         
         # 创建目标变量
         df = self.create_target(df)
